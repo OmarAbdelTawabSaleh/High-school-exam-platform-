@@ -18,6 +18,15 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.social-card {
+    animation: slideUpFade 0.6s ease-out forwards;
+    opacity: 0;
+}
+
     </style>
 </head>
 <body class="bg-gray-50">
@@ -174,12 +183,52 @@
                     )}
 
                     {/* Header */}
-                    <header className="py-10 text-center">
-                        <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">
-                             منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span>
-                        </h1>
-                        <p className="text-gray-500 mt-3 font-bold px-4">Developed by ; Omar Abdel-Tawab Saleh</p>
-                    </header>
+                <header className="py-10 text-center">
+    <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">
+         منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span>
+    </h1>
+    <p className="text-gray-500 mt-3 font-bold px-4">Developed by: Omar Abdel-Tawab Saleh</p>
+    
+    {/* حاوية الأيقونات المتراصة بجانب بعضها */}
+    <div className="flex justify-center items-center gap-2 mt-6">
+        
+        {/* فيسبوك */}
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.1s' }}>
+            <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#1877F2] text-white shadow-md hover:-translate-y-1 transition-transform">
+                <Icon name="facebook" className="w-6 h-6" />
+            </div>
+        </a>
+        
+        {/* واتساب */}
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.2s' }}>
+            <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#25D366] text-white shadow-md hover:-translate-y-1 transition-transform">
+                <Icon name="message-circle" className="w-6 h-6" />
+            </div>
+        </a>
+
+        {/* تليجرام */}
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.3s' }}>
+            <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#229ED9] text-white shadow-md hover:-translate-y-1 transition-transform">
+                <Icon name="send" className="w-6 h-6" />
+            </div>
+        </a>
+
+        {/* إنستغرام */}
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.4s' }}>
+            <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white shadow-md hover:-translate-y-1 transition-transform">
+                <Icon name="instagram" className="w-6 h-6" />
+            </div>
+        </a>
+
+        {/* لينكد إن */}
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.5s' }}>
+            <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#0077B5] text-white shadow-md hover:-translate-y-1 transition-transform">
+                <Icon name="linkedin" className="w-6 h-6" />
+            </div>
+        </a>
+    </div>
+</header>
+
 
                     <main className="flex-grow container mx-auto px-4 max-w-4xl pb-20">
                         {/* Sections View */}
@@ -242,15 +291,37 @@
                             </div>
                         )}
 
-                        {/* Quiz View */}
-                        {view === 'quiz' && activeMat && (
-                            <div className="animate-fade-in bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl relative border border-gray-50">
-                                <div className="absolute top-0 right-0 h-2 bg-blue-600 transition-all rounded-full" style={{width: `${((currentIndex+1)/currentQuestions.length)*100}%`}}></div>
-                                <div className="flex justify-between items-center mb-10 pt-4">
-                                    <span className="font-black text-gray-400 text-sm">السؤال {currentIndex + 1} من {currentQuestions.length}</span>
-                                    <span className="bg-blue-50 text-blue-700 px-4 py-1 rounded-full font-black text-sm">{activeMat.name}</span>
-                                </div>
-                                <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-10 leading-snug">{currentQuestions[currentIndex]?.q}</h3>
+                   {/* Quiz View */}
+{view === 'quiz' && activeMat && (
+    <div className="animate-fade-in bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl relative border border-gray-50">
+        
+        {/* زر الرجوع السريع في الأعلى */}
+        <div className="flex justify-between items-center mb-6">
+            <button 
+                onClick={() => {
+                    if(confirm('هل تريد حقاً الخروج وإلغاء الاختبار؟')) setView('sections');
+                }} 
+                className="flex items-center gap-1 text-red-500 font-bold hover:bg-red-50 px-3 py-2 rounded-xl transition-all"
+            >
+                <Icon name="x-circle" className="w-5 h-5" />
+                خروج
+            </button>
+            <span className="bg-blue-50 text-blue-700 px-4 py-1 rounded-full font-black text-sm">{activeMat.name}</span>
+        </div>
+
+        {/* شريط التقدم */}
+        <div className="w-full bg-gray-100 h-2 rounded-full mb-8 overflow-hidden">
+            <div className="h-full bg-blue-600 transition-all duration-500" style={{width: `${((currentIndex+1)/currentQuestions.length)*100}%`}}></div>
+        </div>
+
+        <div className="flex justify-between items-center mb-10">
+            <span className="font-black text-gray-400 text-sm">السؤال {currentIndex + 1} من {currentQuestions.length}</span>
+        </div>
+
+        <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-10 leading-snug">{currentQuestions[currentIndex]?.q}</h3>
+        
+        {/* ... باقي كود الخيارات والأزرار كما هو ... */}
+
                                 <div className="grid gap-3 mb-12">
                                     {currentQuestions[currentIndex]?.options.map((opt, idx) => (
                                         <button key={idx} onClick={() => setAnswers({...answers, [currentIndex]: idx})}
@@ -303,3 +374,4 @@
     </script>
 </body>
 </html>
+
