@@ -73,7 +73,7 @@
 
             // 2. Fetch Data
             useEffect(() => {
-                const GITHUB_RAW_URL = "https://raw.githubusercontent.com/username/repo/main/questions.json"; // استبدله برابطك
+                const GITHUB_RAW_URL = "https://raw.githubusercontent.com/OmarAbdelTawabSaleh/my-quiz-app/refs/heads/main/questions.json"; // استبدله برابطك
                 fetch(GITHUB_RAW_URL)
                     .then(res => res.json())
                     .then(data => { setQuestionBank(data); setLoading(false); })
