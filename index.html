@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة عمر عبد التواب صالح - ثانوية عامة 2026</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Tajawal', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Firebase Setup
+        const firebaseConfig = {
+            apiKey: "AIzaSyCaFZNgxoXnjuh-0zlQ8lp8pVp2YUMmsp4",
+            databaseURL: "https://thesalafikiller-default-rtdb.firebaseio.com/",
+            projectId: "thesalafikiller"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Helper Components
+        const Icon = ({ name, className }) => {
+            useEffect(() => { lucide.createIcons(); }, [name, className]);
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        const shuffleArray = (array) => {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        };
+
+        function App() {
+            // 1. States & Persistent Storage
+            const [userData, setUserData] = useState(() => {
+                const saved = localStorage.getItem('student_data');
+                return saved ? JSON.parse(saved) : { name: '', city: '', major: '' };
+            });
+
+            const [view, setView] = useState(() => {
+                const saved = localStorage.getItem('student_data');
+                return saved ? 'sections' : 'welcome';
+            });
+
+            const [activeSec, setActiveSec] = useState(null);
+            const [activeMat, setActiveMat] = useState(null);
+            const [questionBank, setQuestionBank] = useState({});
+            const [loading, setLoading] = useState(true);
+            const [currentQuestions, setCurrentQuestions] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [answers, setAnswers] = useState({});
+            const [score, setScore] = useState(0);
+
+            // 2. Fetch Data
+            useEffect(() => {
+                const GITHUB_RAW_URL = "https://raw.githubusercontent.com/username/repo/main/questions.json"; // استبدله برابطك
+                fetch(GITHUB_RAW_URL)
+                    .then(res => res.json())
+                    .then(data => { setQuestionBank(data); setLoading(false); })
+                    .catch(err => {
+                        console.error("Error loading questions:", err);
+                        setQuestionBank({"اللغة العربية": [{q: "برجاء التأكد من رابط GitHub في الكود", options: ["1","2","3","4"], correct: 0}]});
+                        setLoading(false);
+                    });
+            }, []);
+
+            // 3. Logic Functions
+            const handleStartApp = (e) => {
+                e.preventDefault();
+                if(userData.name && userData.city && userData.major) {
+                    localStorage.setItem('student_data', JSON.stringify(userData));
+                    setView('sections');
+                }
+            };
+
+            const saveResultToFirebase = (finalScore, totalQuestions) => {
+                const resultData = {
+                    ...userData,
+                    subject: activeMat.name,
+                    score: finalScore,
+                    total: totalQuestions,
+                    percentage: Math.round((finalScore / totalQuestions) * 100) + "%",
+                    timestamp: new Date().toLocaleString('ar-EG')
+                };
+                database.ref('results').push(resultData);
+            };
+
+            const startQuiz = (material) => {
+                setActiveMat(material);
+                const allQuestions = questionBank[material.name] || [];
+                setCurrentQuestions(shuffleArray(allQuestions).slice(0, 20)); 
+                setCurrentIndex(0);
+                setAnswers({});
+                setView('quiz');
+            };
+
+            const submitQuiz = () => {
+                let finalScore = 0;
+                currentQuestions.forEach((q, idx) => {
+                    if (answers[idx] === q.correct) finalScore++;
+                });
+                setScore(finalScore);
+                saveResultToFirebase(finalScore, currentQuestions.length); 
+                setView('result');
+            };
+
+            // 4. Constants
+            const cities = ["القاهرة", "الجيزة", "الإسكندرية", "الدقهلية", "الشرقية", "المنوفية", "القليوبية", "البحيرة", "الغربية", "بور سعيد", "دمياط", "الإسماعيلية", "السويس", "كفر الشيخ", "الفيوم", "بني سويف", "المنيا", "أسيوط", "سوهاج", "قنا", "الأقصر", "أسوان", "البحر الأحمر", "الوادي الجديد", "مطروح", "شمال سيناء", "جنوب سيناء"];
+
+            const sections = [
+                { id: 'adaby', name: 'القسم الأدبي', icon: 'book-open', color: 'from-orange-400 to-red-600', 
+                  materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'التاريخ', icon: 'landmark' }, { name: 'الجغرافيا', icon: 'map' }, { name: 'الإحصاء', icon: 'pie-chart' }] },
+                { id: 'oloum', name: 'علمي علوم', icon: 'flask-conical', color: 'from-green-400 to-teal-600', 
+                  materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'الأحياء', icon: 'dna' }, { name: 'الكيمياء', icon: 'beaker' }, { name: 'الفيزياء', icon: 'zap' }] },
+                { id: 'riyada', name: 'علمي رياضة', icon: 'calculator', color: 'from-blue-500 to-indigo-700', 
+                  materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'الرياضيات (بحتة وتطبيقية)', icon: 'function-square' }, { name: 'الكيمياء', icon: 'beaker' }, { name: 'الفيزياء', icon: 'zap' }] }
+            ];
+
+            if (loading) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+                    <div className="loader mb-4"></div>
+                    <p className="text-blue-600 font-black text-xl animate-pulse">جاري تحميل البيانات...</p>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* View: Welcome */}
+                    {view === 'welcome' && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-md p-4">
+                            <div className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl animate-fade-in text-center border-t-8 border-blue-600">
+                                <span className="text-6xl block mb-4">⚡</span>
+                                <h2 className="text-3xl font-black text-gray-900 mb-2">مرحباً بك</h2>
+                                <p className="text-blue-600 font-bold mb-8">سجل بياناتك لمرة واحدة فقط</p>
+                                <form onSubmit={handleStartApp} className="space-y-4">
+                                    <input required type="text" placeholder="الاسم ثلاثي" className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-center" 
+                                        onChange={e => setUserData({...userData, name: e.target.value})} />
+                                    <select required className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-gray-500"
+                                        onChange={e => setUserData({...userData, city: e.target.value})}>
+                                        <option value="">اختر محافظتك</option>
+                                        {cities.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <select required className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-gray-500"
+                                        onChange={e => setUserData({...userData, major: e.target.value})}>
+                                        <option value="">التخصص الدراسي</option>
+                                        <option value="adaby">أدبي</option>
+                                        <option value="oloum">علمي علوم</option>
+                                        <option value="riyada">علمي رياضة</option>
+                                    </select>
+                                    <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xl shadow-xl active:scale-95 transition-all">دخول 🚀</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Header */}
+                    <header className="py-10 text-center">
+                        <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">
+                             منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span>
+                        </h1>
+                        <p className="text-gray-500 mt-3 font-bold px-4">Developed by ; Omar Abdel-Tawab Saleh</p>
+                    </header>
+
+                    <main className="flex-grow container mx-auto px-4 max-w-4xl pb-20">
+                        {/* Sections View */}
+                        {view === 'sections' && (
+                            <div className="grid gap-6 animate-fade-in">
+                                {sections.map(s => (
+                                    <div key={s.id} onClick={() => {setActiveSec(s); setView('materials')}} 
+                                        className={`p-10 rounded-[2rem] bg-gradient-to-br ${s.color} text-white shadow-xl active:scale-95 transition-all cursor-pointer group relative overflow-hidden`}>
+                                        <div className="relative z-10 flex justify-between items-center">
+                                            <div>
+                                                <h2 className="text-3xl md:text-4xl font-black mb-1">{s.name}</h2>
+                                                <p className="opacity-80 font-bold">ابدأ اختباراتك</p>
+                                            </div>
+                                            <Icon name={s.icon} className="w-16 h-16 opacity-30 group-hover:opacity-100 transition-all" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Materials View */}
+                        {view === 'materials' && activeSec && (
+                            <div className="animate-fade-in">
+                                <button onClick={() => setView('sections')} className="mb-6 flex items-center gap-2 text-blue-600 font-black">
+                                    <Icon name="arrow-right" className="w-6 h-6" /> العودة للأقسام
+                                </button>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {activeSec.materials.map((m, i) => (
+                                        <div key={i} className="bg-white p-6 rounded-[2rem] shadow-md border border-gray-100 flex justify-between items-center group">
+                                            <div className="flex items-center gap-4">
+                                                <div className="bg-blue-50 p-4 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                    <Icon name={m.icon} className="w-8 h-8" />
+                                                </div>
+                                                <h3 className="text-xl font-black text-gray-800">{m.name}</h3>
+                                            </div>
+                                            <button onClick={() => {setActiveMat(m); setView('test-list')}} 
+                                                className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-black hover:bg-blue-600 transition-all">فتح</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Test List View */}
+                        {view === 'test-list' && activeMat && (
+                            <div className="animate-fade-in text-center">
+                                <button onClick={() => setView('materials')} className="mb-8 flex items-center gap-2 text-blue-600 font-black">
+                                    <Icon name="arrow-right" className="w-5 h-5" /> العودة
+                                </button>
+                                <h2 className="text-2xl font-black mb-10 text-gray-800">اختر اختبار مادة {activeMat.name}</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                    {[...Array(10)].map((_, i) => (
+                                        <button key={i} onClick={() => startQuiz(activeMat)}
+                                            className="bg-white p-6 rounded-3xl border-2 border-gray-100 hover:border-blue-500 transition-all shadow-sm">
+                                            <span className="block text-2xl font-black mb-1">{i+1}</span>
+                                            <span className="text-gray-400 font-bold">اختبار</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Quiz View */}
+                        {view === 'quiz' && activeMat && (
+                            <div className="animate-fade-in bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl relative border border-gray-50">
+                                <div className="absolute top-0 right-0 h-2 bg-blue-600 transition-all rounded-full" style={{width: `${((currentIndex+1)/currentQuestions.length)*100}%`}}></div>
+                                <div className="flex justify-between items-center mb-10 pt-4">
+                                    <span className="font-black text-gray-400 text-sm">السؤال {currentIndex + 1} من {currentQuestions.length}</span>
+                                    <span className="bg-blue-50 text-blue-700 px-4 py-1 rounded-full font-black text-sm">{activeMat.name}</span>
+                                </div>
+                                <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-10 leading-snug">{currentQuestions[currentIndex]?.q}</h3>
+                                <div className="grid gap-3 mb-12">
+                                    {currentQuestions[currentIndex]?.options.map((opt, idx) => (
+                                        <button key={idx} onClick={() => setAnswers({...answers, [currentIndex]: idx})}
+                                            className={`w-full text-right p-5 rounded-[1.5rem] border-2 transition-all font-bold text-lg ${answers[currentIndex] === idx ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-300'}`}>
+                                            {opt}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex flex-col md:flex-row justify-between gap-4">
+                                    <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)}
+                                        className="py-4 px-8 bg-gray-100 text-gray-500 rounded-3xl font-black disabled:opacity-30">السابق</button>
+                                    {currentIndex + 1 === currentQuestions.length ? (
+                                        <button onClick={submitQuiz} className="flex-grow py-4 bg-green-600 text-white rounded-3xl font-black shadow-lg">إنهاء وحفظ النتيجة</button>
+                                    ) : (
+                                        <button onClick={() => setCurrentIndex(currentIndex + 1)}
+                                            className="flex-grow py-4 bg-blue-600 text-white rounded-3xl font-black shadow-lg">التالي</button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Result View */}
+                        {view === 'result' && (
+                            <div className="animate-fade-in text-center px-2">
+                                <div className="bg-white p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] shadow-2xl border-[10px] md:border-[15px] border-double border-blue-50 max-w-2xl mx-auto relative overflow-hidden">
+                                    <h2 className="text-3xl font-black text-gray-900 mb-2">شهادة تقدير</h2>
+                                    <p className="text-lg text-gray-500 font-bold mb-4">يُشهد لـ الطالب:</p>
+                                    <h3 className="text-3xl font-black text-blue-600 mb-6 underline decoration-wavy underline-offset-8">{userData.name}</h3>
+                                    <div className="my-8">
+                                        <p className="text-gray-400 font-black mb-1">النسبة المئوية</p>
+                                        <div className="text-7xl font-black text-gray-900">{Math.round((score/currentQuestions.length)*100)}%</div>
+                                    </div>
+                                    <p className="text-blue-500 font-black text-xl italic mb-8">"عاش يا بطل.. كمل طريقك!"</p>
+                                    <button onClick={() => setView('sections')} className="w-full bg-gray-900 text-white py-5 rounded-3xl font-black text-xl">العودة للرئيسية</button>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="py-10 text-center bg-white border-t border-gray-100">
+                        <p className="text-gray-400 font-bold text-xs tracking-widest uppercase">Junior Developer</p>
+                        <p className="text-xl font-black text-gray-900">Omar Abdel Tawab Saleh</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
