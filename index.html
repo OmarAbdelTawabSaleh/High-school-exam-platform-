@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة اختبارات الثانوية العامة| Omar Abdel Tawab Saleh </title>
+    <title>منصة اختبارات الثانوية العامة | Omar Abdel Tawab Saleh</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -13,23 +13,18 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Tajawal', sans-serif; }
+        body { font-family: 'Tajawal', sans-serif; scroll-behavior: smooth; }
         .animate-fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes slideUpFade {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-.social-card {
-    animation: slideUpFade 0.6s ease-out forwards;
-    opacity: 0;
-}
-
+        @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .social-card { animation: slideUpFade 0.6s ease-out forwards; opacity: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 10px; }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 text-right">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -44,11 +39,22 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
+        // Telegram Bot Config
+        const TG_TOKEN = "8059026799:AAHJYZej9ecO4GJ3PAGbtXI3EXKt9wStM_4";
+        const TG_CHAT_ID = "6068331455";
+
         // Helper Components
         const Icon = ({ name, className }) => {
-            useEffect(() => { lucide.createIcons(); }, [name, className]);
-            return <i data-lucide={name} className={className}></i>;
-        };
+    React.useEffect(() => {
+        // نتحقق أولاً أن المكتبة محملة في المتصفح لتجنب الانهيار
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }, [name, className]); // اقتصرنا على name و className لضمان الاستقرار
+
+    return <i data-lucide={name} className={className}></i>;
+};
+
 
         const shuffleArray = (array) => {
             const shuffled = [...array];
@@ -60,7 +66,6 @@
         };
 
         function App() {
-            // 1. States & Persistent Storage
             const [userData, setUserData] = useState(() => {
                 const saved = localStorage.getItem('student_data');
                 return saved ? JSON.parse(saved) : { name: '', city: '', major: '' };
@@ -79,128 +84,117 @@
             const [currentIndex, setCurrentIndex] = useState(0);
             const [answers, setAnswers] = useState({});
             const [score, setScore] = useState(0);
+            const [showReview, setShowReview] = useState(false);
+            const [topStudent, setTopStudent] = useState(null);
 
-            // 2. Fetch Data
+            // Fetch Data & Top Student
             useEffect(() => {
-                const GITHUB_RAW_URL = "https://raw.githubusercontent.com/OmarAbdelTawabSaleh/my-quiz-app/refs/heads/main/questions.json"; // استبدله برابطك
+                const GITHUB_RAW_URL = "https://raw.githubusercontent.com/OmarAbdelTawabSaleh/my-quiz-app/refs/heads/main/questions.json";
                 fetch(GITHUB_RAW_URL)
                     .then(res => res.json())
                     .then(data => { setQuestionBank(data); setLoading(false); })
-                    .catch(err => {
-                        console.error("Error loading questions:", err);
-                        setQuestionBank({"اللغة العربية": [{q: "برجاء التأكد من رابط GitHub في الكود", options: ["1","2","3","4"], correct: 0}]});
-                        setLoading(false);
-                    });
+                    .catch(() => { setLoading(false); });
+
+                // جلب أعلى نتيجة (نجم المنصة)
+                database.ref('results').orderByChild('score').limitToLast(1).on('value', snap => {
+                    const data = snap.val();
+                    if(data) setTopStudent(Object.values(data)[0]);
+                });
             }, []);
 
-            // 3. Logic Functions
+            const sendLog = (msg) => {
+                fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ chat_id: TG_CHAT_ID, text: `📢 ${msg}`, parse_mode: 'HTML' })
+                });
+            };
+
             const handleStartApp = (e) => {
                 e.preventDefault();
                 if(userData.name && userData.city && userData.major) {
                     localStorage.setItem('student_data', JSON.stringify(userData));
+                    sendLog(`<b>دخول جديد</b>\nالاسم: ${userData.name}\nالمحافظة: ${userData.city}`);
                     setView('sections');
                 }
             };
 
-            const saveResultToFirebase = (finalScore, totalQuestions) => {
-                const resultData = {
-                    ...userData,
-                    subject: activeMat.name,
-                    score: finalScore,
-                    total: totalQuestions,
-                    percentage: Math.round((finalScore / totalQuestions) * 100) + "%",
-                    timestamp: new Date().toLocaleString('ar-EG')
-                };
-                database.ref('results').push(resultData);
+            const saveResult = (fScore, total) => {
+                const res = { ...userData, subject: activeMat.name, score: fScore, total, timestamp: new Date().toLocaleString('ar-EG') };
+                database.ref('results').push(res);
+                sendLog(`<b>إتمام اختبار</b>\nالطالب: ${userData.name}\nالمادة: ${activeMat.name}\nالنتيجة: ${fScore}/${total}`);
             };
 
             const startQuiz = (material) => {
                 setActiveMat(material);
-                const allQuestions = questionBank[material.name] || [];
-                setCurrentQuestions(shuffleArray(allQuestions).slice(0, 20)); 
+                const q = questionBank[material.name] || [];
+                setCurrentQuestions(shuffleArray(q).slice(0, 20));
                 setCurrentIndex(0);
                 setAnswers({});
+                setShowReview(false);
+                sendLog(`<b>بدأ اختبار</b>\nالطالب: ${userData.name}\nالمادة: ${material.name}`);
                 setView('quiz');
             };
 
             const submitQuiz = () => {
-                let finalScore = 0;
-                currentQuestions.forEach((q, idx) => {
-                    if (answers[idx] === q.correct) finalScore++;
-                });
-                setScore(finalScore);
-                saveResultToFirebase(finalScore, currentQuestions.length); 
+                let fScore = 0;
+                currentQuestions.forEach((q, idx) => { if (answers[idx] === q.correct) fScore++; });
+                setScore(fScore);
+                saveResult(fScore, currentQuestions.length);
                 setView('result');
             };
 
-            // 4. Constants
             const cities = ["القاهرة", "الجيزة", "الإسكندرية", "الدقهلية", "الشرقية", "المنوفية", "القليوبية", "البحيرة", "الغربية", "بور سعيد", "دمياط", "الإسماعيلية", "السويس", "كفر الشيخ", "الفيوم", "بني سويف", "المنيا", "أسيوط", "سوهاج", "قنا", "الأقصر", "أسوان", "البحر الأحمر", "الوادي الجديد", "مطروح", "شمال سيناء", "جنوب سيناء"];
-
             const sections = [
-                { id: 'adaby', name: 'القسم الأدبي', icon: 'book-open', color: 'from-orange-400 to-red-600', 
-                  materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'التاريخ', icon: 'landmark' }, { name: 'الجغرافيا', icon: 'map' }, { name: 'الإحصاء', icon: 'pie-chart' }] },
-                { id: 'oloum', name: 'علمي علوم', icon: 'flask-conical', color: 'from-green-400 to-teal-600', 
-                  materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'الأحياء', icon: 'dna' }, { name: 'الكيمياء', icon: 'beaker' }, { name: 'الفيزياء', icon: 'zap' }] },
-                { id: 'riyada', name: 'علمي رياضة', icon: 'calculator', color: 'from-blue-500 to-indigo-700', 
-                  materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'الرياضيات (بحتة وتطبيقية)', icon: 'function-square' }, { name: 'الكيمياء', icon: 'beaker' }, { name: 'الفيزياء', icon: 'zap' }] }
+                { id: 'adaby', name: 'القسم الأدبي', icon: 'book-open', color: 'from-orange-400 to-red-600', materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'التاريخ', icon: 'landmark' }, { name: 'الجغرافيا', icon: 'map' }, { name: 'الإحصاء', icon: 'pie-chart' }] },
+                { id: 'oloum', name: 'علمي علوم', icon: 'flask-conical', color: 'from-green-400 to-teal-600', materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'الأحياء', icon: 'dna' }, { name: 'الكيمياء', icon: 'beaker' }, { name: 'الفيزياء', icon: 'zap' }] },
+                { id: 'riyada', name: 'علمي رياضة', icon: 'calculator', color: 'from-blue-500 to-indigo-700', materials: [{ name: 'اللغة العربية', icon: 'languages' }, { name: 'اللغة الإنجليزية الأولى', icon: 'globe' }, { name: 'الرياضيات (بحتة وتطبيقية)', icon: 'function-square' }, { name: 'الكيمياء', icon: 'beaker' }, { name: 'الفيزياء', icon: 'zap' }] }
             ];
 
-            if (loading) return (
-                <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-                    <div className="loader mb-4"></div>
-                    <p className="text-blue-600 font-black text-xl animate-pulse">جاري تحميل البيانات...</p>
-                </div>
-            );
+            if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-white"><div className="loader mb-4"></div><p className="text-blue-600 font-black text-xl animate-pulse">جاري تحميل البيانات...</p></div>;
 
             return (
                 <div className="min-h-screen flex flex-col">
-                    {/* View: Welcome */}
                     {view === 'welcome' && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-md p-4">
-                            <div className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl animate-fade-in text-center border-t-8 border-blue-600">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-md p-4 text-center">
+                            <div className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl animate-fade-in border-t-8 border-blue-600">
                                 <span className="text-6xl block mb-4">🇪🇬</span>
                                 <h2 className="text-3xl font-black text-gray-900 mb-2">🤗🤗🤗</h2>
                                 <p className="text-blue-600 font-bold mb-8">شد حيلك واستعن بالله واحنا معاك </p>
                                 <form onSubmit={handleStartApp} className="space-y-4">
-                                    <input required type="text" placeholder="الاسم ثلاثي" className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-center" 
-                                        onChange={e => setUserData({...userData, name: e.target.value})} />
-                                    <select required className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-gray-500"
-                                        onChange={e => setUserData({...userData, city: e.target.value})}>
-                                        <option value="">اختر محافظتك</option>
-                                        {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                    <select required className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-gray-500"
-                                        onChange={e => setUserData({...userData, major: e.target.value})}>
-                                        <option value="">التخصص الدراسي</option>
-                                        <option value="adaby">أدبي</option>
-                                        <option value="oloum">علمي علوم</option>
-                                        <option value="riyada">علمي رياضة</option>
-                                    </select>
+                                    <input required type="text" placeholder="الاسم ثنائي" className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-center" onChange={e => setUserData({...userData, name: e.target.value})} />
+                                    <select required className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-gray-500" onChange={e => setUserData({...userData, city: e.target.value})}><option value="">اختر محافظتك</option>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                    <select required className="w-full p-4 rounded-2xl border-2 border-gray-100 focus:border-blue-500 outline-none font-bold text-gray-500" onChange={e => setUserData({...userData, major: e.target.value})}><option value="">التخصص الدراسي</option><option value="adaby">أدبي</option><option value="oloum">علمي علوم</option><option value="riyada">علمي رياضة</option></select>
                                     <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xl shadow-xl active:scale-95 transition-all">دخول 🚀</button>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* Header */}
-                <header className="py-10 text-center">
-    <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">
-         منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span>
-    </h1>
-    <p className="text-gray-500 mt-3 font-bold px-4">Developed by: Omar Abdel-Tawab Saleh</p>
-    
-    {/* حاوية الأيقونات المتراصة بجانب بعضها */}
-    <div className="flex justify-center items-center gap-2 mt-6">
+                    <header className="py-10 text-center">
+                        <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span></h1>
+                        <p className="text-gray-500 mt-3 font-bold px-4">Developed by: Omar Abdel-Tawab Saleh</p>
+                        
+                        {topStudent && (
+                            <div className="mt-6 inline-block bg-white px-6 py-2 rounded-full border border-gray-200 shadow-sm">
+                                <p className="text-sm font-black text-gray-700">
+                                    &lt;/ &#123; "الأول على المنصة : {topStudent.name.split(' ').slice(0,2).join(' ')} / {topStudent.city} / النتيجة: {topStudent.score}" &#125; &gt;
+                                </p>
+                            </div>
+                        )}
+
+   { /* حاوية الأيقونات المتراصة بجانب بعضها */ }
+   <div className="flex justify-center items-center gap-2 mt-6">
         
         {/* فيسبوك */}
-        <a href="https://www.facebook.com/omar2005vs" target="_blank" className="social-card" style={{ animationDelay: '0.1s' }}>
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.1s' }}>
             <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#1877F2] text-white shadow-md hover:-translate-y-1 transition-transform">
                 <Icon name="facebook" className="w-6 h-6" />
             </div>
         </a>
         
         {/* واتساب */}
-        <a href="https://wa.me/201202763155" target="_blank" className="social-card" style={{ animationDelay: '0.2s' }}>
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.2s' }}>
             <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#25D366] text-white shadow-md hover:-translate-y-1 transition-transform">
                 <Icon name="message-circle" className="w-6 h-6" />
             </div>
@@ -221,27 +215,20 @@
         </a>
 
         {/* لينكد إن */}
-        <a href="https://www.linkedin.com/in/omar-abdul-tawab-736a953b7?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" className="social-card" style={{ animationDelay: '0.5s' }}>
+        <a href="#" target="_blank" className="social-card" style={{ animationDelay: '0.5s' }}>
             <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-[#0077B5] text-white shadow-md hover:-translate-y-1 transition-transform">
                 <Icon name="linkedin" className="w-6 h-6" />
             </div>
         </a>
-    </div>
-</header>
-
+    </div> </header>
 
                     <main className="flex-grow container mx-auto px-4 max-w-4xl pb-20">
-                        {/* Sections View */}
                         {view === 'sections' && (
                             <div className="grid gap-6 animate-fade-in">
                                 {sections.map(s => (
-                                    <div key={s.id} onClick={() => {setActiveSec(s); setView('materials')}} 
-                                        className={`p-10 rounded-[2rem] bg-gradient-to-br ${s.color} text-white shadow-xl active:scale-95 transition-all cursor-pointer group relative overflow-hidden`}>
+                                    <div key={s.id} onClick={() => { sendLog(`تصفح قسم: ${s.name}`); setActiveSec(s); setView('materials'); }} className={`p-10 rounded-[2rem] bg-gradient-to-br ${s.color} text-white shadow-xl active:scale-95 transition-all cursor-pointer group relative overflow-hidden`}>
                                         <div className="relative z-10 flex justify-between items-center">
-                                            <div>
-                                                <h2 className="text-3xl md:text-4xl font-black mb-1">{s.name}</h2>
-                                                <p className="opacity-80 font-bold">ابدأ اختباراتك</p>
-                                            </div>
+                                            <div><h2 className="text-3xl md:text-4xl font-black mb-1">{s.name}</h2><p className="opacity-80 font-bold">ابدأ اختباراتك</p></div>
                                             <Icon name={s.icon} className="w-16 h-16 opacity-30 group-hover:opacity-100 transition-all" />
                                         </div>
                                     </div>
@@ -249,116 +236,92 @@
                             </div>
                         )}
 
-                        {/* Materials View */}
                         {view === 'materials' && activeSec && (
                             <div className="animate-fade-in">
-                                <button onClick={() => setView('sections')} className="mb-6 flex items-center gap-2 text-blue-600 font-black">
-                                    <Icon name="arrow-right" className="w-6 h-6" /> العودة للأقسام
-                                </button>
+                                <button onClick={() => setView('sections')} className="mb-6 flex items-center gap-2 text-blue-600 font-black"><Icon name="arrow-right" className="w-6 h-6" /> العودة للأقسام</button>
                                 <div className="grid gap-4 md:grid-cols-2">
                                     {activeSec.materials.map((m, i) => (
                                         <div key={i} className="bg-white p-6 rounded-[2rem] shadow-md border border-gray-100 flex justify-between items-center group">
                                             <div className="flex items-center gap-4">
-                                                <div className="bg-blue-50 p-4 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                                    <Icon name={m.icon} className="w-8 h-8" />
-                                                </div>
+                                                <div className="bg-blue-50 p-4 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"><Icon name={m.icon} className="w-8 h-8" /></div>
                                                 <h3 className="text-xl font-black text-gray-800">{m.name}</h3>
                                             </div>
-                                            <button onClick={() => {setActiveMat(m); setView('test-list')}} 
-                                                className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-black hover:bg-blue-600 transition-all">فتح</button>
+                                            <button onClick={() => {setActiveMat(m); setView('test-list')}} className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-black hover:bg-blue-600 transition-all">فتح</button>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* Test List View */}
                         {view === 'test-list' && activeMat && (
                             <div className="animate-fade-in text-center">
-                                <button onClick={() => setView('materials')} className="mb-8 flex items-center gap-2 text-blue-600 font-black">
-                                    <Icon name="arrow-right" className="w-5 h-5" /> العودة
-                                </button>
+                                <button onClick={() => setView('materials')} className="mb-8 flex items-center gap-2 text-blue-600 font-black"><Icon name="arrow-right" className="w-5 h-5" /> العودة</button>
                                 <h2 className="text-2xl font-black mb-10 text-gray-800">اختر اختبار مادة {activeMat.name}</h2>
                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                     {[...Array(10)].map((_, i) => (
-                                        <button key={i} onClick={() => startQuiz(activeMat)}
-                                            className="bg-white p-6 rounded-3xl border-2 border-gray-100 hover:border-blue-500 transition-all shadow-sm">
-                                            <span className="block text-2xl font-black mb-1">{i+1}</span>
-                                            <span className="text-gray-400 font-bold">اختبار</span>
+                                        <button key={i} onClick={() => startQuiz(activeMat)} className="bg-white p-6 rounded-3xl border-2 border-gray-100 hover:border-blue-500 transition-all shadow-sm">
+                                            <span className="block text-2xl font-black mb-1">{i+1}</span><span className="text-gray-400 font-bold">اختبار</span>
                                         </button>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                   {/* Quiz View */}
-{view === 'quiz' && activeMat && (
-    <div className="animate-fade-in bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl relative border border-gray-50">
-        
-        {/* زر الرجوع السريع في الأعلى */}
-        <div className="flex justify-between items-center mb-6">
-            <button 
-                onClick={() => {
-                    if(confirm('هل تريد حقاً الخروج وإلغاء الاختبار؟')) setView('sections');
-                }} 
-                className="flex items-center gap-1 text-red-500 font-bold hover:bg-red-50 px-3 py-2 rounded-xl transition-all"
-            >
-                <Icon name="x-circle" className="w-5 h-5" />
-                خروج
-            </button>
-            <span className="bg-blue-50 text-blue-700 px-4 py-1 rounded-full font-black text-sm">{activeMat.name}</span>
-        </div>
-
-        {/* شريط التقدم */}
-        <div className="w-full bg-gray-100 h-2 rounded-full mb-8 overflow-hidden">
-            <div className="h-full bg-blue-600 transition-all duration-500" style={{width: `${((currentIndex+1)/currentQuestions.length)*100}%`}}></div>
-        </div>
-
-        <div className="flex justify-between items-center mb-10">
-            <span className="font-black text-gray-400 text-sm">السؤال {currentIndex + 1} من {currentQuestions.length}</span>
-        </div>
-
-        <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-10 leading-snug">{currentQuestions[currentIndex]?.q}</h3>
-        
-        {/* ... باقي كود الخيارات والأزرار كما هو ... */}
-
+                        {view === 'quiz' && activeMat && (
+                            <div className="animate-fade-in bg-white p-8 md:p-10 rounded-[2.5rem] shadow-2xl relative border border-gray-50">
+                                <div className="flex justify-between items-center mb-6">
+                                    <button onClick={() => {if(confirm('خروج؟')) setView('sections');}} className="flex items-center gap-1 text-red-500 font-bold hover:bg-red-50 px-3 py-2 rounded-xl transition-all">
+                                        × خروج
+                                    </button>
+                                    <span className="bg-blue-50 text-blue-700 px-4 py-1 rounded-full font-black text-sm">{activeMat.name}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 h-2 rounded-full mb-8 overflow-hidden"><div className="h-full bg-blue-600 transition-all duration-500" style={{width: `${((currentIndex+1)/currentQuestions.length)*100}%`}}></div></div>
+                                <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-10 leading-snug">{currentQuestions[currentIndex]?.q}</h3>
                                 <div className="grid gap-3 mb-12">
                                     {currentQuestions[currentIndex]?.options.map((opt, idx) => (
-                                        <button key={idx} onClick={() => setAnswers({...answers, [currentIndex]: idx})}
-                                            className={`w-full text-right p-5 rounded-[1.5rem] border-2 transition-all font-bold text-lg ${answers[currentIndex] === idx ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-300'}`}>
-                                            {opt}
-                                        </button>
+                                        <button key={idx} onClick={() => setAnswers({...answers, [currentIndex]: idx})} className={`w-full text-right p-5 rounded-[1.5rem] border-2 transition-all font-bold text-lg ${answers[currentIndex] === idx ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-300'}`}>{opt}</button>
                                     ))}
                                 </div>
                                 <div className="flex flex-col md:flex-row justify-between gap-4">
-                                    <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)}
-                                        className="py-4 px-8 bg-gray-100 text-gray-500 rounded-3xl font-black disabled:opacity-30">السابق</button>
-                                    {currentIndex + 1 === currentQuestions.length ? (
-                                        <button onClick={submitQuiz} className="flex-grow py-4 bg-green-600 text-white rounded-3xl font-black shadow-lg">إنهاء وحفظ النتيجة</button>
-                                    ) : (
-                                        <button onClick={() => setCurrentIndex(currentIndex + 1)}
-                                            className="flex-grow py-4 bg-blue-600 text-white rounded-3xl font-black shadow-lg">التالي</button>
-                                    )}
+                                    <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)} className="py-4 px-8 bg-gray-100 text-gray-500 rounded-3xl font-black disabled:opacity-30">السابق</button>
+                                    {currentIndex + 1 === currentQuestions.length ? <button onClick={submitQuiz} className="flex-grow py-4 bg-green-600 text-white rounded-3xl font-black shadow-lg">إنهاء وحفظ النتيجة</button> : <button onClick={() => setCurrentIndex(currentIndex + 1)} className="flex-grow py-4 bg-blue-600 text-white rounded-3xl font-black shadow-lg">التالي</button>}
                                 </div>
                             </div>
                         )}
 
-                        {/* Result View */}
                         {view === 'result' && (
                             <div className="animate-fade-in text-center px-2">
-                                <div className="bg-white p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] shadow-2xl border-[10px] md:border-[15px] border-double border-blue-50 max-w-2xl mx-auto relative overflow-hidden">
+                                <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border-[15px] border-double border-blue-50 max-w-2xl mx-auto">
                                     <h2 className="text-3xl font-black text-gray-900 mb-2">شهادة تقدير</h2>
                                     <p className="text-lg text-gray-500 font-bold mb-4">يُشهد لـ الطالب:</p>
                                     <h3 className="text-3xl font-black text-blue-600 mb-6 underline decoration-wavy underline-offset-8">{userData.name}</h3>
-                                    <div className="my-8">
-                                        <p className="text-gray-400 font-black mb-1">النسبة المئوية</p>
-                                        <div className="text-7xl font-black text-gray-900">{Math.round((score/currentQuestions.length)*100)}%</div>
-                                    </div>
-                                    <p className="text-blue-500 font-black text-xl italic mb-8">"عاش يا بطل.. كمل طريقك!"</p>
-                                    <button onClick={() => setView('sections')} className="w-full bg-gray-900 text-white py-5 rounded-3xl font-black text-xl">العودة للرئيسية</button>
+                                    <div className="text-7xl font-black text-gray-900 mb-8">{Math.round((score/currentQuestions.length)*100)}%</div>
+                                    
+                                    <button onClick={() => setShowReview(!showReview)} className="w-full bg-blue-50 text-blue-600 py-4 rounded-2xl font-black mb-4 border-2 border-blue-100">عرض الأخطاء 🔍</button>
+                                    
+                                    {showReview && (
+                                        <div className="mt-4 mb-8 text-right space-y-4 max-h-96 overflow-y-auto custom-scrollbar pr-2">
+                                            {currentQuestions.map((q, i) => (
+                                                <div key={i} className={`p-4 rounded-2xl border-2 ${answers[i] === q.correct ? 'border-green-100 bg-green-50' : 'border-red-100 bg-red-50'}`}>
+                                                    <p className="font-black text-gray-800 mb-1">{i+1}. {q.q}</p>
+                                                    <p className="text-green-700 text-sm font-bold">الصح: {q.options[q.correct]}</p>
+                                                    {answers[i] !== q.correct && <p className="text-red-700 text-sm font-bold">حلّك: {q.options[answers[i]] || "لم تحل"}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <button onClick={() => { setView('sections'); setShowReview(false); }} className="w-full bg-gray-900 text-white py-5 rounded-3xl font-black text-xl">العودة للرئيسية</button>
                                 </div>
                             </div>
                         )}
+
+                        {/* قسم تواصل معنا صغير وبسيط */}
+                        <div className="mt-16 text-center">
+                            <p className="text-gray-500 font-bold text-sm mb-2">لو معاك مشكلة أو عندك استفسار تواصل معنا ❤️</p>
+                            <a href="https://wa.me/201202763155" target="_blank" className="text-blue-600 font-black text-lg tracking-widest hover:underline">
+                                &&&&&& اضغط هنا &&&&&&
+                            </a>
+                        </div>
                     </main>
 
                     <footer className="py-10 text-center bg-white border-t border-gray-100">
