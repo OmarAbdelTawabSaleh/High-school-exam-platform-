@@ -75,6 +75,8 @@
                 const saved = localStorage.getItem('student_data');
                 return saved ? 'sections' : 'welcome';
             });
+            const [showInfoModal, setShowInfoModal] = useState(false);
+
 
             const [activeSec, setActiveSec] = useState(null);
             const [activeMat, setActiveMat] = useState(null);
@@ -98,25 +100,26 @@ useEffect(() => {
         .catch(() => { setLoading(false); });
     
     // جلب أعلى 4 نتائج (نجوم المنصة)
-    database.ref('results').orderByChild('score').limitToLast(20).on('value', snap => {
+database.ref('results').orderByChild('score').limitToLast(50).on('value', snap => {
     const data = snap.val();
     if(data) {
         const resultsArray = Object.values(data);
 
-        // 1. تصفية الأسماء المكررة: نأخذ فقط أعلى درجة لكل اسم
+        // التصفية: نأخذ فقط أعلى درجة لكل اسم فريد
         const uniqueStudents = Object.values(resultsArray.reduce((acc, current) => {
-            // إذا كان الطالب موجوداً مسبقاً، قارن الدرجة الحالية بالسابقة وخذ الأعلى
-            if (!acc[current.name] || current.score > acc[current.name].score) {
-                acc[current.name] = current;
+            const studentName = current.name.trim(); // تنظيف الاسم من المسافات
+            if (!acc[studentName] || current.score > acc[studentName].score) {
+                acc[studentName] = current;
             }
             return acc;
         }, {}));
 
-        // 2. ترتيب الطلاب من الأعلى للأقل
-        const sortedList = uniqueStudents.sort((a, b) => b.score - a.score);
+        // الترتيب التنازلي وأخذ أول 5 فقط
+        const sortedList = uniqueStudents
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5);
 
-        // 3. أخذ أول 4 طلاب فريدين فقط
-        setTopStudent(sortedList.slice(0, 4)); 
+        setTopStudent(sortedList); 
     }
 });
 
@@ -130,14 +133,41 @@ useEffect(() => {
                 });
             };
 
-            const handleStartApp = (e) => {
-                e.preventDefault();
-                if(userData.name && userData.city && userData.major) {
-                    localStorage.setItem('student_data', JSON.stringify(userData));
-                    sendLog(`<b>دخول جديد</b>\nالاسم: ${userData.name}\nالمحافظة: ${userData.city}`);
-                    setView('sections');
-                }
-            };
+           const handleStartApp = (e) => {
+    e.preventDefault();
+    
+    // التحقق هل توجد بيانات قديمة مخزنة في المتصفح أم لا
+    const previousData = localStorage.getItem('student_data');
+    
+    if(userData.name && userData.city && userData.major) {
+        // حفظ البيانات الجديدة/المحدثة
+        localStorage.setItem('student_data', JSON.stringify(userData));
+
+        if (previousData) {
+            // الحالة: الطالب مسجل بياناته من قبل وعاد للمنصة
+            const oldStudent = JSON.parse(previousData);
+            sendLog(`
+<b>🔙 راجع الطالب (عائد للمنصة)</b>
+<b>👤 الاسم:</b> ${userData.name}
+<b>📍 المحافظة:</b> ${userData.city}
+<b>📚 القسم:</b> ${userData.major}
+<b>🕒 آخر ظهور سابق:</b> تم التعرف عليه من المتصفح
+            `);
+        } else {
+            // الحالة: أول مرة يفتح المنصة أو مسح بيانات المتصفح
+            sendLog(`
+<b>🆕 طالب جديد (أول دخول)</b>
+<b>👤 الاسم:</b> ${userData.name}
+<b>📍 المحافظة:</b> ${userData.city}
+<b>📚 القسم:</b> ${userData.major}
+<b>🚀 تم تسجيله كـ مستخدم جديد بنجاح</b>
+            `);
+        }
+        
+        setView('sections');
+    }
+};
+
 
             const saveResult = (fScore, total) => {
                 const res = { ...userData, subject: activeMat.name, score: fScore, total, timestamp: new Date().toLocaleString('ar-EG') };
@@ -190,6 +220,17 @@ useEffect(() => {
                             </div>
                         </div>
                     )}
+                    {/* أيقونة التنبيه أعلى اليسار */}
+<div className="fixed top-2 left-4 z-[100] text-center">
+    <button 
+        onClick={() => setShowInfoModal(true)}
+        className="w-5 h-5 bg-white border-2 border-blue-600 text-blue-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform font-black text-xl"
+    >
+        !
+    </button>
+    <p className="text-[10px] font-bold text-gray-500 mt-1">اضغط هنا 😍</p>
+</div>
+
 
                     <header className="py-10 text-center">
                         <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span></h1>
@@ -198,7 +239,7 @@ useEffect(() => {
                    {topStudent && Array.isArray(topStudent) && (
     <div className="mt-6 flex flex-col gap-3 items-center px-4">
         {topStudent.map((student, index) => {
-            const ranks = ["الأول", "الثاني", "الثالث", "الرابع"];
+const ranks = ["الأول 🥇", "الثاني 🥈", "الثالث 🥉", "الرابع 🎖️", "الخامس ✨"];
             return (
                 <div key={index} className="inline-block bg-white px-6 py-2 rounded-full border border-gray-200 shadow-sm animate-fade-in w-full max-w-md">
                     <p className="text-sm font-black text-gray-700">
@@ -254,7 +295,11 @@ useEffect(() => {
                         {view === 'sections' && (
                             <div className="grid gap-6 animate-fade-in">
                                 {sections.map(s => (
-                                    <div key={s.id} onClick={() => { sendLog(`تصفح قسم: ${s.name}`); setActiveSec(s); setView('materials'); }} className={`p-10 rounded-[2rem] bg-gradient-to-br ${s.color} text-white shadow-xl active:scale-95 transition-all cursor-pointer group relative overflow-hidden`}>
+                                    <div key={s.id} onClick={() => { 
+    sendLog(`<b>📂 الطالب [ ${userData.name} ] دخل الآن قسم: ${s.name}</b>`);
+    setActiveSec(s); 
+    setView('materials'); 
+}} className={`p-10 rounded-[2rem] bg-gradient-to-br ${s.color} text-white shadow-xl active:scale-95 transition-all cursor-pointer group relative overflow-hidden`}>
                                         <div className="relative z-10 flex justify-between items-center">
                                             <div><h2 className="text-3xl md:text-4xl font-black mb-1">{s.name}</h2><p className="opacity-80 font-bold">ابدأ اختباراتك</p></div>
                                             <Icon name={s.icon} className="w-16 h-16 opacity-30 group-hover:opacity-100 transition-all" />
@@ -356,6 +401,48 @@ useEffect(() => {
                         <p className="text-gray-400 font-bold text-xs tracking-widest uppercase">Junior Developer</p>
                         <p className="text-xl font-black text-gray-900">Omar Abdel Tawab Saleh</p>
                     </footer>
+                    {/* نافذة المشاركة في الخير */}
+{showInfoModal && (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        {/* خلفية البلور */}
+        <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+            onClick={() => setShowInfoModal(false)}
+        ></div>
+        
+        {/* محتوى النافذة */}
+        <div className="relative bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-fade-in border-b-8 border-blue-600 text-center">
+            <button 
+                onClick={() => setShowInfoModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold"
+            >
+                ✕
+            </button>
+            
+            <div className="text-4xl mb-4">
+            😁</div>
+            <h2 className="text-2xl font-black text-blue-600 mb-4">ما تنساش تشارك في الخير 😍</h2>
+            
+            <p className="text-gray-700 font-bold leading-relaxed mb-6">
+                لو عندك مشكلة أو استفسار أو حابب تشارك معانا لو معاك كتب pdf أو أسئلة نضيفها.. جزاك الله خيراً أرسل لنا عبر الواتساب 😍
+            </p>
+            
+            <div className="space-y-2">
+                <a 
+                    href="https://wa.me/201202763155" 
+                    target="_blank"
+                    className="block bg-[#25D366] text-white py-4 rounded-2xl font-black text-lg shadow-md active:scale-95 transition-all"
+                >
+                    تواصل واتساب الآن 📱
+                </a>
+                <p className="text-[11px] text-gray-400 font-bold border-b border-gray-200 inline-block pb-1">
+                    دوس على الرقم 😍
+                </p>
+            </div>
+        </div>
+    </div>
+)}
+
                 </div>
             );
         }
