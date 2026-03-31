@@ -88,19 +88,39 @@
             const [topStudent, setTopStudent] = useState(null);
 
             // Fetch Data & Top Student
-            useEffect(() => {
-                const GITHUB_RAW_URL = "https://raw.githubusercontent.com/OmarAbdelTawabSaleh/my-quiz-app/refs/heads/main/questions.json";
-                fetch(GITHUB_RAW_URL)
-                    .then(res => res.json())
-                    .then(data => { setQuestionBank(data); setLoading(false); })
-                    .catch(() => { setLoading(false); });
+            // Fetch Data & Top Students
+useEffect(() => {
+    const GITHUB_RAW_URL = "https://raw.githubusercontent.com/OmarAbdelTawabSaleh/my-quiz-app/refs/heads/main/questions.json";
+    fetch(GITHUB_RAW_URL)
+        .then(res => res.json())
+        .then(data => { setQuestionBank(data);
+            setLoading(false); })
+        .catch(() => { setLoading(false); });
+    
+    // جلب أعلى 4 نتائج (نجوم المنصة)
+    database.ref('results').orderByChild('score').limitToLast(20).on('value', snap => {
+    const data = snap.val();
+    if(data) {
+        const resultsArray = Object.values(data);
 
-                // جلب أعلى نتيجة (نجم المنصة)
-                database.ref('results').orderByChild('score').limitToLast(1).on('value', snap => {
-                    const data = snap.val();
-                    if(data) setTopStudent(Object.values(data)[0]);
-                });
-            }, []);
+        // 1. تصفية الأسماء المكررة: نأخذ فقط أعلى درجة لكل اسم
+        const uniqueStudents = Object.values(resultsArray.reduce((acc, current) => {
+            // إذا كان الطالب موجوداً مسبقاً، قارن الدرجة الحالية بالسابقة وخذ الأعلى
+            if (!acc[current.name] || current.score > acc[current.name].score) {
+                acc[current.name] = current;
+            }
+            return acc;
+        }, {}));
+
+        // 2. ترتيب الطلاب من الأعلى للأقل
+        const sortedList = uniqueStudents.sort((a, b) => b.score - a.score);
+
+        // 3. أخذ أول 4 طلاب فريدين فقط
+        setTopStudent(sortedList.slice(0, 4)); 
+    }
+});
+
+}, []);
 
             const sendLog = (msg) => {
                 fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
@@ -175,13 +195,21 @@
                         <h1 className="text-4xl md:text-5xl font-black text-gray-900 flex justify-center items-center gap-3 px-4">منصة اختبارات <span className="text-blue-600 font-mono">&lt;/&gt;</span></h1>
                         <p className="text-gray-500 mt-3 font-bold px-4">Developed by: Omar Abdel-Tawab Saleh</p>
                         
-                        {topStudent && (
-                            <div className="mt-6 inline-block bg-white px-6 py-2 rounded-full border border-gray-200 shadow-sm">
-                                <p className="text-sm font-black text-gray-700">
-                                    &lt;/ &#123; "الأول على المنصة : {topStudent.name.split(' ').slice(0,2).join(' ')} / {topStudent.city} / النتيجة: {topStudent.score}" &#125; &gt;
-                                </p>
-                            </div>
-                        )}
+                   {topStudent && Array.isArray(topStudent) && (
+    <div className="mt-6 flex flex-col gap-3 items-center px-4">
+        {topStudent.map((student, index) => {
+            const ranks = ["الأول", "الثاني", "الثالث", "الرابع"];
+            return (
+                <div key={index} className="inline-block bg-white px-6 py-2 rounded-full border border-gray-200 shadow-sm animate-fade-in w-full max-w-md">
+                    <p className="text-sm font-black text-gray-700">
+                        &lt;/ &#123; "{ranks[index]} على المنصة : {student.name.split(' ').slice(0,2).join(' ')} / {student.city} / النتيجة: {student.score}" &#125; &gt;
+                    </p>
+                </div>
+            );
+        })}
+    </div>
+)}
+
 
    { /* حاوية الأيقونات المتراصة بجانب بعضها */ }
    <div className="flex justify-center items-center gap-2 mt-6">
@@ -337,4 +365,3 @@
     </script>
 </body>
 </html>
-
